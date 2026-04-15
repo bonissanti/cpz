@@ -27,7 +27,7 @@ pub fn parser_args(args: &[String], mut flags: Flags) -> CpData
 
     let dest: &String = files.last().unwrap();
     let srcs: &[String] = &files[..files.len() - 1];
-    
+
     return CpData { flags, sources: srcs.to_vec(), destination: dest.to_string() };
 }
 
@@ -45,9 +45,4 @@ fn check_flag(c: char, flags: &mut Flags)
             std::process::exit(1);
         },
     }
-}
-
-fn check_if_file_exists(path: &str) -> bool
-{
-    return std::path::Path::new(path).exists();
 }

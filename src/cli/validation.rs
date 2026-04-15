@@ -1,25 +1,28 @@
 use std::fs;
-use std::fs::{File, OpenOptions};
+use std::fs::{OpenOptions};
+use std::path::Path;
 use crate::cli::bitflags::Flags;
 use crate::cli::cp_data::CpData;
 
 pub fn validation(cp_data: &CpData) -> bool
 {
     for src in cp_data.sources.iter() {
-        if !validation_folder(src, cp_data) {
-            return false;
+        if let Ok(metadata) = fs::metadata(src)  && metadata.is_dir(){
+            if !validation_folder(src, cp_data) {
+                return false;
+            }
         }
         if !validation_file(src, cp_data) {
             return false;
         }
     }
-    return true;
+    true
 }
 
 fn validation_folder(src: &String, cp_data: &CpData) -> bool
 {
-    let src_is_dir = fs::metadata(src).is_ok();
-    let dest_is_dir = fs::metadata(&cp_data.destination).is_ok();
+    let src_is_dir = fs::metadata(src).ok().map(|m| m.is_dir()).unwrap_or(false);
+    let dest_is_dir = fs::metadata(&cp_data.destination).ok().map(|m| m.is_dir()).unwrap_or(false);
 
     if src_is_dir && !dest_is_dir {
         eprintln!("cpz: cannot overwrite non-directory '{}' with directory '{}'", cp_data.destination, src);
@@ -56,7 +59,12 @@ fn validation_file(src: &String, cp_data: &CpData) -> bool
         return false;
     }
 
-    if check_if_src_has_permission_to_read(src) {
+    if !check_if_dest_is_dir(&cp_data.destination, cp_data) {
+        eprintln!("cpz: target '{}' is not a directory", cp_data.destination);
+        return false;
+    }
+
+    if !check_if_src_has_permission_to_read(src) {
         eprintln!("cpz: cannot stat '{}': Permission denied", src);
         return false;
     }
@@ -84,6 +92,16 @@ fn check_if_dest_and_src_are_equals(dest: &String, src: &String) -> bool
     }
 }
 
+fn check_if_dest_is_dir(dest: &String, cp_data: &CpData) -> bool
+{
+    if cp_data.sources.len() > 1 {
+        if let Ok(metadata) = fs::metadata(dest)  && !metadata.is_dir(){
+            return false;
+        }
+    }
+    return true;
+}
+
 fn check_if_dest_is_subdir_of_src(dest: &String, src: &String) -> bool
 {
     let src_canonical = fs::canonicalize(src).ok();
@@ -107,6 +125,15 @@ fn check_if_src_has_permission_to_read(src: &String) -> bool
 
 fn check_if_dest_has_permission_to_write(dest: &String) -> bool
 {
-    return OpenOptions::new().write(true).append(true).open(dest).is_ok();
+    let path = Path::new(dest);
 
+    if path.exists() {
+        return OpenOptions::new().write(true).open(dest).is_ok();
+    }
+    else {
+        path.parent()
+            .and_then(|p| fs::metadata(p).ok())
+            .map(|m| !m.permissions().readonly())
+            .unwrap_or(false)
+    }
 }
