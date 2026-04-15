@@ -2,6 +2,8 @@ mod cli;
 
 use cli::parser::parser_args;
 use crate::cli::bitflags::Flags;
+use crate::cli::cp_data;
+use crate::cli::cp_data::CpData;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -17,5 +19,7 @@ fn main() {
         return;
     }
 
-    parser_args(& args, flags);
+    let cp_data: CpData = parser_args(& args, flags);
+
+    
 }
