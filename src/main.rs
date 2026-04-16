@@ -1,4 +1,5 @@
 mod cli;
+pub mod orchestrator;
 
 use cli::parser::parser_args;
 use crate::cli::bitflags::Flags;
@@ -6,7 +7,7 @@ use crate::cli::cp_data::CpData;
 use crate::cli::validation::validation;
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = std::env::args().skip(1).collect();
     let flags: Flags = Flags::empty();
 
     if args.len() == 1 {
@@ -21,4 +22,5 @@ fn main() {
 
     let cp_data: CpData = parser_args(& args, flags);
     validation(&cp_data);
+    orchestrator::job::Job::create_job(&cp_data);
 }

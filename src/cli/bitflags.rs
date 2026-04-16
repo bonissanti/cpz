@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Copy, Clone)]
     pub struct Flags: u8 {
         const RECURSIVE         = 0b00001;
         const NO_DEREFERENCE    = 0b00010;
