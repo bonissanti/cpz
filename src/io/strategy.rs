@@ -19,7 +19,7 @@ pub enum StorageKind {
 impl Strategy {
     pub fn determine_strategy(jobs: Vec<crate::orchestrator::job::Job>) -> crate::orchestrator::thread_pool::ThreadPool
     {
-        let storage_kind: StorageKind = Self::find_storage_kind();
+        let storage_kind: StorageKind = Self::detect_storage_kind();
         let total_size: u64 = jobs.iter().map(|j| j.size).sum();
 
         if jobs.len() == 1 && total_size < LIMIT_FILE_SIZE {
@@ -49,7 +49,7 @@ impl Strategy {
 
     }
 
-    fn find_storage_kind() -> StorageKind
+    fn detect_storage_kind() -> StorageKind
     {
         let storage_kind: String = read_to_string(SYSFS_PATH).unwrap();
 

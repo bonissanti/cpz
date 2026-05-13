@@ -1,8 +1,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam::channel::{self, Sender, Receiver};
 
+//TODO: add documentation of box, dyn, fnOnce, Send and static
 pub struct ThreadPool {
-    sender: Sender<Box<dyn FnOnce() + Send + 'static>>,
+    sender: channel::Sender<Box<dyn FnOnce() + Send + 'static>>,
     _handles: Vec<std::thread::JoinHandle<()>>,
 }
 
@@ -12,14 +13,13 @@ impl ThreadPool {
         let mut handles = Vec::with_capacity(size);
 
         for id in 0..size {
-            let rx = receiver.clone();
+            let rx: Receiver<Box<dyn FnOnce() + Send + 'static>> = receiver.clone();
             handles.push(std::thread::spawn(move || {
                 while let Ok(task) = rx.recv() {
                     println!("Worker {} is running", id);
                     task()
                 }
             }))
-
         }
 
         ThreadPool {
@@ -28,10 +28,10 @@ impl ThreadPool {
         }
     }
 
-    pub fn execute<F>(&self, task: F)
+    pub fn execute<F>(&self, f: F)
     where
-        F: FnOnce() + Send + 'static
+        F: FnOnce() + Send + 'static,
     {
-        self.sender.send(Box::new(task)).unwrap();
+        self.sender.send(Box::new(f)).unwrap();
     }
 }

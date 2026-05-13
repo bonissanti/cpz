@@ -22,6 +22,14 @@ fn main() {
     }
 
     let cp_data: CpData = parser_args(& args, flags);
-    validation(&cp_data);
-    orchestrator::job::Job::create_job(&cp_data);
+    
+    if !validation(&cp_data) {
+        return;
+    }
+    
+    let jobs: Vec<crate::orchestrator::job::Job> = orchestrator::job::Job::create_job(&cp_data);
+    io::strategy::Strategy::determine_strategy(jobs);
+    // control::state::State::run()
+    // integrity::integrity::Integrity::verify_integrity();
 }
+
