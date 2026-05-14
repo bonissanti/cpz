@@ -3,8 +3,8 @@ use crossbeam::channel::{self, Sender, Receiver};
 
 //TODO: add documentation of box, dyn, fnOnce, Send and static
 pub struct ThreadPool {
-    sender: channel::Sender<Box<dyn FnOnce() + Send + 'static>>,
-    _handles: Vec<std::thread::JoinHandle<()>>,
+    sender: Option<channel::Sender<Box<dyn FnOnce() + Send + 'static>>>,
+    _handles: Option<Vec<std::thread::JoinHandle<()>>>,
 }
 
 impl ThreadPool {
@@ -23,8 +23,8 @@ impl ThreadPool {
         }
 
         ThreadPool {
-            sender,
-            _handles: handles,
+            sender: Option::from(sender),
+            _handles: Option::from(handles),
         }
     }
 
@@ -32,6 +32,18 @@ impl ThreadPool {
     where
         F: FnOnce() + Send + 'static,
     {
-        self.sender.send(Box::new(f)).unwrap();
+        self.sender.as_ref().unwrap().send(Box::new(f)).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        if let Some(handles) = self._handles.take() {
+            for handle in handles {
+                let _ = handle.join();
+            }
+        }
     }
 }

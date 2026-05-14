@@ -39,8 +39,9 @@ impl Strategy {
         return crate::orchestrator::thread_pool::ThreadPool::new(0);
     }
 
-    fn single_thread(with_chunk: bool)
+    fn single_thread(job: Job) -> Strategy
     {
+        
 
     }
 
