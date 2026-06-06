@@ -1,6 +1,7 @@
 mod cli;
 pub mod orchestrator;
 pub mod io;
+pub mod utils;
 
 use cli::parser::parser_args;
 use crate::cli::bitflags::Flags;

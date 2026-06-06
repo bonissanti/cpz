@@ -2,9 +2,10 @@ use std::fs::read_to_string;
 use crate::orchestrator::job::Job;
 use crate::orchestrator::thread_pool::ThreadPool;
 use crate::orchestrator::worker::Worker;
+use crate::utils::enums::StorageKind;
+use crate::utils::utils::Utils;
 
 const LIMIT_FILE_SIZE: u64 = 2000000000;
-const SYSFS_PATH: &str = "/sys/block/sda/queue/rotational"; //TODO: this could be nvme0n1 as well, change later
 
 pub enum ExecutePlan {
     SingleThread { use_chunks: bool },
@@ -17,16 +18,12 @@ pub struct Strategy {
     pub jobs:           Vec<crate::orchestrator::job::Job>
 }
 
-pub enum StorageKind {
-    SSD,
-    HDD
-}
 
 impl Strategy {
     pub fn determine_strategy(jobs: Vec<crate::orchestrator::job::Job>) -> Strategy
     {
         let plan: ExecutePlan;
-        let storage_kind: StorageKind = Self::detect_storage_kind(); //TODO: put it in conditionals
+        let storage_kind: StorageKind = Utils::detect_what_kind_of_device_is();
         let total_size: u64 = jobs.iter().map(|j| j.size).sum();
 
         if jobs.len() == 1 && total_size < LIMIT_FILE_SIZE {
@@ -45,19 +42,6 @@ impl Strategy {
             plan = ExecutePlan::Pooled { pool: ThreadPool::new(6), use_chunks: true };
         }
         Strategy { plan, storage_kind, jobs }
-    }
-
-
-    fn detect_storage_kind() -> StorageKind
-    {
-        let storage_kind: String = read_to_string(SYSFS_PATH).unwrap();
-
-        if storage_kind == "0\n" {
-            StorageKind::SSD
-        }
-        else {
-            StorageKind::HDD
-        }
     }
 
     pub fn execute(self)
