@@ -21,7 +21,7 @@ jobs:
       - name: Install cargo-valgrind
         run: cargo install cargo-valgrind
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --locked
       - name: Run tests
         run: cargo test --verbose
       - name: Run tests under Valgrind
