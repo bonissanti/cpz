@@ -8,3 +8,4 @@ bitflags = "2.4"
 walkdir = "2.5"
 uuid = { version = "1.23.0", features = ["v4"] }
 crossbeam = "0.8.4"
+signal-hook = "0.4.4"

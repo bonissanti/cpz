@@ -2,13 +2,17 @@ mod cli;
 pub mod orchestrator;
 pub mod io;
 pub mod utils;
-
+use std::sync::Arc;
+use signal_hook::consts::{SIGCONT, SIGINT, SIGSTOP};
+use signal_hook::iterator::backend::PollResult::Signal;
+use signal_hook::iterator::Signals;
 use cli::parser::parser_args;
 use crate::cli::bitflags::Flags;
 use crate::cli::cp_data::CpData;
 use crate::cli::validation::validation;
 use crate::io::strategy;
 use crate::io::strategy::Strategy;
+use crate::orchestrator::control::control_state::ControlState;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -32,9 +36,28 @@ fn main() {
     
     let jobs: Vec<crate::orchestrator::job::Job> = orchestrator::job::Job::create_job(&cp_data);
     let strategy: Strategy = io::strategy::Strategy::determine_strategy(jobs);
+
+    let control: Arc<ControlState> = Arc::new(ControlState::new());
+
+    let control_clone = Arc::clone(&control);
+    std::thread::spawn(move || {
+        signal_watcher(control_clone);
+    });
+
     strategy.execute();
 
     // control::state::State::run()
     // integrity::integrity::Integrity::verify_integrity();
 }
 
+fn signal_watcher(ctrl: Arc<ControlState>) {
+    let mut signals = Signals::new(&[SIGSTOP, SIGCONT, SIGINT]).unwrap();
+    for signal in signals.forever() {
+        match signal {
+            SIGSTOP => ctrl.pause(),
+            SIGCONT => ctrl.resume(),
+            SIGINT => { ctrl.cancel(); break; },
+            _ => {}
+        }
+    }
+}

@@ -6,3 +6,9 @@ pub enum StorageKind {
     DEFAULT
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    Running,
+    Stopped,
+    Cancelled
+}
