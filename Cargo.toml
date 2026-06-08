@@ -1,0 +1,10 @@
+[package]
+name = "cpz"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.4"
+walkdir = "2.5"
+uuid = { version = "1.23.0", features = ["v4"] }
+crossbeam = "0.8.4"

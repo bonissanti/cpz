@@ -69,36 +69,36 @@ mod tests {
 
     #[test]
     fn detects_nvme_device_correctly() {
-        let mounts_path = create_fixture_file("mounts_nvme", "/dev/nvme0n1p1 /mnt ext4 rw,relatime 0 0\n");
+        let mounts_path = create_fixture_file("mounts_nvme", "/dev/nvme0n1p1 / ext4 rw,relatime 0 0\n");
         let sysfs_path = create_fixture_file("sysfs_nvme", "0\n");
-        
+
         let result = Utils::detect_device_from_paths(&mounts_path, &sysfs_path);
         assert_eq!(result, StorageKind::NVME);
     }
 
     #[test]
     fn detects_mmcblk_as_hdd_correctly() {
-        let mounts_path = create_fixture_file("mounts_mmcblk", "/dev/mmcblk0p1 /boot vfat rw,relatime 0 0\n");
+        let mounts_path = create_fixture_file("mounts_mmcblk", "/dev/mmcblk0p1 / vfat rw,relatime 0 0\n");
         let sysfs_path = create_fixture_file("sysfs_mmcblk", "1\n");
-        
+
         let result = Utils::detect_device_from_paths(&mounts_path, &sysfs_path);
         assert_eq!(result, StorageKind::HDD);
     }
 
     #[test]
     fn detects_sd_device_as_ssd_when_rotational_is_zero() {
-        let mounts_path = create_fixture_file("mounts_sd_ssd", "/dev/sda1 /data ext4 rw,relatime 0 0\n");
+        let mounts_path = create_fixture_file("mounts_sd_ssd", "/dev/sda1 / ext4 rw,relatime 0 0\n");
         let sysfs_path = create_fixture_file("sysfs_sd_ssd", "0\n");
-        
+
         let result = Utils::detect_device_from_paths(&mounts_path, &sysfs_path);
         assert_eq!(result, StorageKind::SSD);
     }
 
     #[test]
     fn detects_sd_device_as_hdd_when_rotational_is_one() {
-        let mounts_path = create_fixture_file("mounts_sd_hdd", "/dev/sdb1 /backup ext4 rw,relatime 0 0\n");
+        let mounts_path = create_fixture_file("mounts_sd_hdd", "/dev/sdb1 / ext4 rw,relatime 0 0\n");
         let sysfs_path = create_fixture_file("sysfs_sd_hdd", "1\n");
-        
+
         let result = Utils::detect_device_from_paths(&mounts_path, &sysfs_path);
         assert_eq!(result, StorageKind::HDD);
     }

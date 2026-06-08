@@ -1,0 +1,28 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Valgrind
+        run: sudo apt-get install -y valgrind
+      - name: Install cargo-valgrind
+        run: cargo install cargo-valgrind
+      - name: Build
+        run: cargo build --locked
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Run tests under Valgrind
+        run: cargo valgrind test
