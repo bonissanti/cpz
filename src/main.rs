@@ -1,10 +1,14 @@
 mod cli;
 pub mod orchestrator;
+pub mod io;
+pub mod utils;
 
 use cli::parser::parser_args;
 use crate::cli::bitflags::Flags;
 use crate::cli::cp_data::CpData;
 use crate::cli::validation::validation;
+use crate::io::strategy;
+use crate::io::strategy::Strategy;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -21,6 +25,16 @@ fn main() {
     }
 
     let cp_data: CpData = parser_args(& args, flags);
-    validation(&cp_data);
-    orchestrator::job::Job::create_job(&cp_data);
+    
+    if !validation(&cp_data) {
+        return;
+    }
+    
+    let jobs: Vec<crate::orchestrator::job::Job> = orchestrator::job::Job::create_job(&cp_data);
+    let strategy: Strategy = io::strategy::Strategy::determine_strategy(jobs);
+    strategy.execute();
+
+    // control::state::State::run()
+    // integrity::integrity::Integrity::verify_integrity();
 }
+
