@@ -44,6 +44,7 @@ impl Strategy {
         Strategy { plan, storage_kind, jobs }
     }
 
+    //TODO: change this
     pub fn execute(self)
     {
         match self.plan

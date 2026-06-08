@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam::channel::{self, Sender, Receiver};
 
-//TODO: add documentation of box, dyn, fnOnce, Send and static
+//TODO: add documentation of box, dyn, fnOnce, Send, static and algorithm of thread pool
 pub struct ThreadPool {
     sender: Option<channel::Sender<Box<dyn FnOnce() + Send + 'static>>>,
     _handles: Option<Vec<std::thread::JoinHandle<()>>>,
