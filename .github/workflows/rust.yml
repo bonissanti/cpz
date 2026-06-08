@@ -23,7 +23,4 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
       - name: Run tests under Valgrind
-        run: |
-          BINARY=$(cargo test --verbose --no-run 2>&1 | grep -oP '(?<=Executable unittests ).*(?= \()')
-          valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all $BINARY
-
+        run: cargo valgrind test
