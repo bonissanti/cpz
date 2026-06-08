@@ -1,13 +1,9 @@
 use std::cmp::PartialEq;
-use std::fs::DirEntry;
+use std::fs::{DirEntry, File};
+use std::os::unix::fs::FileExt;
+use crate::utils::constants::{DEFAULT_MINIMUM_CHUNKSIZE, HDD_MINIMUM_CHUNKSIZE, NVME_MINIMUM_CHUNKSIZE, SSD_MINIMUM_CHUNKSIZE};
 use crate::utils::enums::StorageKind;
 use crate::utils::utils::Utils;
-
-const DEFAULT_MINIMUM_CHUNKSIZE: u64 = 3 * 64000000;
-const HDD_MINIMUM_CHUNKSIZE: u64 = 3 * 64000000;
-const SSD_MINIMUM_CHUNKSIZE: u64 = 3 * 8000000;
-const NVME_MINIMUM_CHUNKSIZE: u64 = 3 * 2000000;
-
 
 pub struct ChunkRange {
     pub offset: u64,
@@ -15,26 +11,38 @@ pub struct ChunkRange {
 }
 
 impl ChunkRange {
-    pub fn split(file_size: u64, storage_kind: &StorageKind)
+    pub fn split_file_into_chunks(file_size: u64) -> Vec<ChunkRange>
     {
+        let mut chunks: Vec<ChunkRange> = Vec::new();
+        let mut offset: u64 = 0;
+        let chunksize: u64 = Self::get_chunksize();
+
+        while offset < file_size {
+            let remaining = file_size - offset;
+            let length = chunksize.min(remaining);
+            chunks.push(ChunkRange { offset, length });
+            offset += length;
+        }
+        chunks
     }
 
-    pub fn get_chunksize(entry: DirEntry) -> u64
+    pub fn get_chunksize() -> u64
     {
-        let storage_kind: StorageKind = Utils::detect_what_kind_of_device_is();//TODO: put it in conditionals
-        
-        if storage_kind == StorageKind::SSD {
-            return SSD_MINIMUM_CHUNKSIZE;
-        }
+        let storage_kind: StorageKind = Utils::detect_what_kind_of_device_is();
 
-        else if storage_kind == StorageKind::HDD {
-            return HDD_MINIMUM_CHUNKSIZE;
+        match storage_kind {
+            StorageKind::SSD  => SSD_MINIMUM_CHUNKSIZE,
+            StorageKind::HDD  => HDD_MINIMUM_CHUNKSIZE,
+            StorageKind::NVME => NVME_MINIMUM_CHUNKSIZE,
+            _ => DEFAULT_MINIMUM_CHUNKSIZE
         }
+    }
 
-        else if storage_kind == StorageKind::NVME {
-            return NVME_MINIMUM_CHUNKSIZE;
-        }
+    pub fn read_chunk(file: &File, chunk: &ChunkRange, buf: &mut [u8]) -> std::io::Result<usize> {
+        file.read_at(buf, chunk.offset)
+    }
 
-        return DEFAULT_MINIMUM_CHUNKSIZE
+    pub fn write_chunk(file: &File, chunk: &ChunkRange, buf: &[u8]) -> std::io::Result<usize> {
+        file.write_at(buf, chunk.offset)
     }
 }

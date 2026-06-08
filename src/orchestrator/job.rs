@@ -4,14 +4,16 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 use crate::cli::bitflags::Flags;
 use crate::cli::cp_data::CpData;
+use crate::utils::constants::{HDD_MINIMUM_CHUNKSIZE, NVME_MINIMUM_CHUNKSIZE, SSD_MINIMUM_CHUNKSIZE};
 
 pub struct Job {
-    pub id:         Uuid,
-    pub src:        PathBuf,
-    pub dest:       PathBuf,
-    pub flags:      Flags,
-    pub size:       u64,
-    pub checksum:   bool
+    pub id:             Uuid,
+    pub src:            PathBuf,
+    pub dest:           PathBuf,
+    pub flags:          Flags,
+    pub size:           u64,
+    pub checksum:       bool,
+    pub needs_chunking: bool
 }
 
 impl Job {
@@ -50,7 +52,8 @@ impl Job {
             dest: dest_absolute_path,
             flags,
             size,
-            checksum: false
+            checksum: false,
+            needs_chunking: Self::define_if_chunk_is_needed(size)
         }
     }
 
@@ -73,17 +76,29 @@ impl Job {
             }
 
             let dest_file_abs = dest_absolute_path.join(&src_relative_path);
+            let file_size = entry.metadata().map(|m| m.len()).unwrap_or(0);
 
             jobs.push(Job {
                 id: Uuid::new_v4(),
                 src: entry.path().to_path_buf(),
                 dest: dest_file_abs,
                 flags,
-                size: entry.metadata().map(|m| m.len()).unwrap_or(0),
-                checksum: false
+                size: file_size,
+                checksum: false,
+                needs_chunking: Self::define_if_chunk_is_needed(file_size)
             })
         }
 
         jobs
+    }
+
+    fn define_if_chunk_is_needed(file_size: u64) -> bool
+    {
+        if file_size > HDD_MINIMUM_CHUNKSIZE ||
+            file_size > SSD_MINIMUM_CHUNKSIZE ||
+            file_size > NVME_MINIMUM_CHUNKSIZE {
+            return true;
+        }
+        false
     }
 }
