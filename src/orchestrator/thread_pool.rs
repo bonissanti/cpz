@@ -28,6 +28,10 @@ impl ThreadPool {
         }
     }
 
+    pub fn worker_count(&self) -> usize {
+        self._handles.as_ref().map_or(0, |h| h.len())
+    }
+
     pub fn execute<F>(&self, f: F)
     where
         F: FnOnce() + Send + 'static,
@@ -45,5 +49,87 @@ impl Drop for ThreadPool {
                 let _ = handle.join();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn create_thread_pool_with_specific_size(size: usize) -> ThreadPool {
+        ThreadPool::new(size)
+    }
+
+    #[test]
+    fn test_thread_pool_initialization_with_specific_size() {
+        let size = 4;
+        let thread_pool = create_thread_pool_with_specific_size(size);
+        assert_eq!(thread_pool.worker_count(), size);
+    }
+
+    #[test]
+    fn test_thread_pool_executes_single_task() {
+        let task_execution_count = Arc::new(AtomicUsize::new(0));
+        let task_execution_count_clone = Arc::clone(&task_execution_count);
+
+        {
+            let thread_pool = create_thread_pool_with_specific_size(2);
+            thread_pool.execute(move || {
+                task_execution_count_clone.fetch_add(1, Ordering::SeqCst);
+            });
+        }
+
+        assert_eq!(task_execution_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_thread_pool_executes_multiple_tasks_concurrently() {
+        use std::sync::Barrier;
+
+        let pool_size = 4;
+        let completed_task_count = Arc::new(AtomicUsize::new(0));
+        let active_task_count = Arc::new(AtomicUsize::new(0));
+        let peak_active_task_count = Arc::new(AtomicUsize::new(0));
+        let all_workers_active_barrier = Arc::new(Barrier::new(pool_size));
+
+        {
+            let thread_pool = create_thread_pool_with_specific_size(pool_size);
+            for _ in 0..pool_size {
+                let completed_task_count = Arc::clone(&completed_task_count);
+                let active_task_count = Arc::clone(&active_task_count);
+                let peak_active_task_count = Arc::clone(&peak_active_task_count);
+                let all_workers_active_barrier = Arc::clone(&all_workers_active_barrier);
+                thread_pool.execute(move || {
+                    let current_active = active_task_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak_active_task_count.fetch_max(current_active, Ordering::SeqCst);
+                    all_workers_active_barrier.wait();
+                    active_task_count.fetch_sub(1, Ordering::SeqCst);
+                    completed_task_count.fetch_add(1, Ordering::SeqCst);
+                });
+            }
+        }
+
+        assert_eq!(completed_task_count.load(Ordering::SeqCst), pool_size);
+        assert!(peak_active_task_count.load(Ordering::SeqCst) >= pool_size);
+    }
+
+    #[test]
+    fn test_thread_pool_executes_more_tasks_than_workers() {
+        let pool_size = 4;
+        let total_tasks = 20;
+        let completed_task_count = Arc::new(AtomicUsize::new(0));
+
+        {
+            let thread_pool = create_thread_pool_with_specific_size(pool_size);
+            for _ in 0..total_tasks {
+                let completed_task_count = Arc::clone(&completed_task_count);
+                thread_pool.execute(move || {
+                    completed_task_count.fetch_add(1, Ordering::SeqCst);
+                });
+            }
+        }
+
+        assert_eq!(completed_task_count.load(Ordering::SeqCst), total_tasks);
     }
 }
