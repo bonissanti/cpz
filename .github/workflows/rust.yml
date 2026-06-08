@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Valgrind
         run: sudo apt-get install -y valgrind
+      - name: Install cargo-valgrind
+        run: cargo install cargo-valgrind
       - name: Build
         run: cargo build --verbose
       - name: Run tests
