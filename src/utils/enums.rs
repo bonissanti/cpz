@@ -12,3 +12,8 @@ pub enum State {
     Stopped,
     Cancelled
 }
+
+#[derive(Debug)]
+pub enum CopyError {
+    Cancelled,
+}

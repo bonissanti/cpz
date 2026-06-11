@@ -1,21 +1,24 @@
-use std::fs::read_to_string;
+use std::net::Shutdown::Write;
+use crate::io;
+use crate::io::chunked::ChunkRange;
+use crate::orchestrator::control::control_state::ControlState;
 use crate::orchestrator::job::Job;
 use crate::orchestrator::thread_pool::ThreadPool;
-use crate::orchestrator::worker::Worker;
-use crate::utils::enums::StorageKind;
+use crate::utils::enums::{CopyError, StorageKind};
 use crate::utils::utils::Utils;
+use std::sync::Arc;
 
 const LIMIT_FILE_SIZE: u64 = 2000000000;
 
 pub enum ExecutePlan {
-    SingleThread { use_chunks: bool },
-    Pooled { pool: ThreadPool, use_chunks: bool }
+    SingleThread,
+    Pooled { pool: ThreadPool }
 }
 
 pub struct Strategy {
     pub plan:           ExecutePlan,
     pub storage_kind:   StorageKind,
-    pub jobs:           Vec<crate::orchestrator::job::Job>
+    pub job:            Vec<Job>,
 }
 
 
@@ -24,43 +27,83 @@ impl Strategy {
     {
         let plan: ExecutePlan;
         let storage_kind: StorageKind = Utils::detect_what_kind_of_device_is();
-        let total_size: u64 = jobs.iter().map(|j| j.size).sum();
 
-        if jobs.len() == 1 && total_size < LIMIT_FILE_SIZE {
-            plan = ExecutePlan::SingleThread { use_chunks: false };
+        if jobs.iter().all(|j| j.needs_chunking == false) && jobs.len() == 1 {
+            plan = ExecutePlan::SingleThread;
         }
-
-        else if jobs.len() == 1 && total_size > LIMIT_FILE_SIZE {
-            plan = ExecutePlan::SingleThread { use_chunks: true };
-        }
-
-        else if jobs.len() > 1 && total_size < LIMIT_FILE_SIZE {
-            plan = ExecutePlan::Pooled { pool: ThreadPool::new(3), use_chunks: false };
-        }
-
         else {
-            plan = ExecutePlan::Pooled { pool: ThreadPool::new(6), use_chunks: true };
+            plan = ExecutePlan::Pooled { pool: ThreadPool::get_threadpool_by_storage_kind(storage_kind) };
         }
-        Strategy { plan, storage_kind, jobs }
+        return Strategy { plan, storage_kind, job: jobs };
     }
 
-    //TODO: change this
-    pub fn execute(self)
+    fn determine_execute_plan(job: &Job) -> ExecutePlan
     {
-        match self.plan
-        {
-            ExecutePlan::SingleThread { use_chunks } => {
-                let job: Job = self.jobs.into_iter().next().unwrap();
-                Worker::single_thread(job, use_chunks);
-            },
-            ExecutePlan::Pooled { pool, use_chunks } => {
-                for job in self.jobs
-                {
+        if job.needs_chunking == true {
+            return ExecutePlan::Pooled { pool: ThreadPool::get_threadpool_by_storage_kind(job.storage_kind) }
+        }
+        return ExecutePlan::SingleThread;
+    }
+
+    pub fn execute(self, ctrl: Arc<ControlState>)
+    {
+        match self.plan {
+            ExecutePlan::SingleThread => {
+                io::write::Write::copy_direct(self.job);
+            }
+            ExecutePlan::Pooled { pool} => {
+                let chunks = ChunkRange::split_file_into_chunks(self.job.size);
+
+                for chunk in chunks {
+                    if ctrl.is_cancelled() {
+                        return;
+                    }
+
+                    let ctrl_clone = Arc::clone(&ctrl);
+                    let src = self.job.src.clone();
+                    let dest = self.job.dest.clone();
+
                     pool.execute(move || {
-                        Worker::pooled(job, use_chunks);
+                        if ctrl_clone.is_cancelled() {
+                            return;
+                        }
+                        io::write::Write::copy_chunk(src, dest, chunk)
+
                     })
                 }
             }
         }
+    }
+
+    fn handle_single_thread(jobs: Vec<Job>, ctrl: Arc<ControlState>) {
+        let job = jobs.into_iter().next().unwrap();
+
+        if job.needs_chunking {
+            let chunks = ChunkRange::split_file_into_chunks(job.size);
+
+            for chunk in chunks {
+                match io::write::Write::copy_chunk(job.src.clone(), job.dest.clone(), chunk, ctrl) {
+                    Ok(_) => {}
+                    Err(CopyError::Cancelled) => {
+                        // handle cancellation
+                    }
+                    Err(e) => {
+                        // handle other errors
+                    }
+                }
+            }
+            return
+        }
+
+        match io::write::Write::copy_direct(job.src.clone(), job.dest.clone(), ctrl) {
+            Ok(_) => {}
+            Err(CopyError::Cancelled) => {
+                // handle cancellation
+            }
+            Err(e) => {
+                // handle other errors
+            }
+        }
+
     }
 }

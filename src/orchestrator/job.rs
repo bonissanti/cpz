@@ -5,6 +5,8 @@ use walkdir::WalkDir;
 use crate::cli::bitflags::Flags;
 use crate::cli::cp_data::CpData;
 use crate::utils::constants::{HDD_MINIMUM_CHUNKSIZE, NVME_MINIMUM_CHUNKSIZE, SSD_MINIMUM_CHUNKSIZE};
+use crate::utils::enums::StorageKind;
+use crate::utils::utils::Utils;
 
 pub struct Job {
     pub id:             Uuid,
@@ -13,7 +15,8 @@ pub struct Job {
     pub flags:          Flags,
     pub size:           u64,
     pub checksum:       bool,
-    pub needs_chunking: bool
+    pub needs_chunking: bool,
+    pub storage_kind:   StorageKind
 }
 
 impl Job {
@@ -53,7 +56,8 @@ impl Job {
             flags,
             size,
             checksum: false,
-            needs_chunking: Self::define_if_chunk_is_needed(size)
+            needs_chunking: Self::define_if_chunk_is_needed(size),
+            storage_kind: Utils::detect_what_kind_of_device_is()
         }
     }
 
@@ -85,7 +89,8 @@ impl Job {
                 flags,
                 size: file_size,
                 checksum: false,
-                needs_chunking: Self::define_if_chunk_is_needed(file_size)
+                needs_chunking: Self::define_if_chunk_is_needed(file_size),
+                storage_kind: Utils::detect_what_kind_of_device_is()
             })
         }
 

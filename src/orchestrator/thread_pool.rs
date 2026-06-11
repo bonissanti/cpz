@@ -1,5 +1,6 @@
+use crate::utils::enums::StorageKind;
+use crossbeam::channel::{self, Receiver};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use crossbeam::channel::{self, Sender, Receiver};
 
 //TODO: add documentation of box, dyn, fnOnce, Send, static and algorithm of thread pool
 pub struct ThreadPool {
@@ -16,7 +17,6 @@ impl ThreadPool {
             let rx: Receiver<Box<dyn FnOnce() + Send + 'static>> = receiver.clone();
             handles.push(std::thread::spawn(move || {
                 while let Ok(task) = rx.recv() {
-                    println!("Worker {} is running", id);
                     task()
                 }
             }))
@@ -37,6 +37,24 @@ impl ThreadPool {
         F: FnOnce() + Send + 'static,
     {
         self.sender.as_ref().unwrap().send(Box::new(f)).unwrap();
+    }
+
+    pub fn get_threadpool_by_storage_kind(storage_kind: StorageKind) -> ThreadPool
+    {
+        if storage_kind == StorageKind::HDD {
+            return ThreadPool::new(2)
+        }
+        else if storage_kind == StorageKind::SSD {
+            return ThreadPool::new(4)
+        }
+        else if storage_kind == StorageKind::NVME {
+            let cpus_available = std::thread::available_parallelism()
+                .map(|x| x.get())
+                .unwrap_or(4);
+
+            return ThreadPool::new(cpus_available)
+        }
+        return ThreadPool::new(2)
     }
 }
 
