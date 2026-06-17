@@ -1,28 +1,75 @@
-# Utils Module
+# Module: `utils`
 
-The `utils` module is the overarching location for project-wide utilities, constants, data structures, and hardware detection logic.
+The `utils` module is the overarching location for project-wide enumerations, numerical thresholds, standalone helper functions, and crucially, **hardware detection logic**.
 
-## Submodules
+---
 
-### 1. `enums`
-Provides global enumerations used to represent state and characteristics across the entire codebase.
-- **`StorageKind`**: Represents the physical nature of the storage device (`SSD`, `NVMe`, `HDD`, `DEFAULT`). This heavily impacts how the program schedules I/O operations and parallelism.
-- **`State`**: Represents the current execution state of the copy process (`Running`, `Stopped`, `Cancelled`), utilized heavily by the orchestrator's control flow.
-- **`CopyError`**: A generalized error enum to encapsulate domain-specific failures (like a copy being cancelled by the user).
+## Sub-modules
 
-### 2. `constants`
-Holds compile-time numerical constants crucial for tuning the application's performance characteristics.
-- **Chunk Sizes (`HDD_MINIMUM_CHUNKSIZE`, `SSD_MINIMUM_CHUNKSIZE`, etc.):** When a file is exceedingly large, transferring it linearly on a single thread is inefficient. These constants define the threshold at which a file should be chunked into smaller blocks and parallelized, optimized per storage medium.
+| File | Responsibility |
+|---|---|
+| `enums.rs` | Global state and domain types |
+| `constants.rs` | Compile-time numerical tunables |
+| `utils.rs` | Utility functions, notably disk-type detection |
 
-### 3. `utils`
-Contains standalone helper functions. The standout feature is the **Hardware Detection Logic**.
+---
 
-#### Hardware Detection (`detect_what_kind_of_device_is`)
-To optimize concurrency and chunking, CPZ attempts to deduce the underlying disk technology running the OS's mount points.
-1. **Reads `/proc/mounts`**: Scans the active mounts on the Linux system to find the physical block device backing the root `/` partition.
-2. **Device Name Parsing**: 
-   - `nvme...` is immediately flagged as `NVMe`.
-   - `mmcblk...` (SD Cards/eMMC) is flagged as `HDD` due to typical low random I/O performance.
-   - `sd...`, `hd...`, `vd...` (SATA/SCSI/Virtual) require further inspection.
-3. **Reads `/sys/block/.../queue/rotational`**: For ambiguous devices, it checks the kernel's `sysfs`. If the drive reports `1` (rotational), it's a mechanical HDD. If it reports `0`, it's an SSD.
-This logic empowers the orchestrator to instantiate the correct Thread Pool size to prevent hardware thrashing.
+## `enums.rs` — Global Types
+
+### Core Enums
+
+| Enum | Variants | Purpose |
+|---|---|---|
+| `StorageKind` | `SSD`, `NVMe`, `HDD`, `DEFAULT` | Informs the size of the Thread Pool and Chunk capacities |
+| `State` | `Running`, `Stopped`, `Cancelled` | Held within `ControlState` to coordinate pause/resume/cancel |
+| `CopyError` | `Cancelled` | Generic wrapper for domain-specific execution halts |
+
+---
+
+## `constants.rs` — Numerical Tunables
+
+```rust
+pub const HDD_MINIMUM_CHUNKSIZE: u64 = 3 * 64_000_000;  // 192 MB
+pub const SSD_MINIMUM_CHUNKSIZE: u64 = 3 * 8_000_000;   // 24 MB
+pub const NVME_MINIMUM_CHUNKSIZE: u64 = 3 * 2_000_000;  // 6 MB
+```
+
+These constants define the size thresholds at which single-threaded operations become pooled, chunked operations. They vary by `StorageKind` because an NVMe can handle micro-parallelism, while a mechanical HDD requires huge sequential buffers to maintain throughput.
+
+---
+
+## `utils.rs` — Hardware Detection
+
+### What it does
+
+`Utils::detect_what_kind_of_device_is()` attempts to deduce the underlying disk technology running the OS's root partition (`/`).
+
+### How it works on Linux
+
+1. **Read Mounts:** Scans `/proc/mounts` to find the physical block device mapped to `/`.
+2. **Name Heuristics:**
+    - If the device name starts with `nvme`, return `StorageKind::NVMe`.
+    - If it starts with `mmcblk` (eMMC / SD Cards), return `StorageKind::HDD` (low random I/O).
+3. **Sysfs Inspection:** If the device is standard SCSI/SATA (`sdX`, `hdX`, `vdX`), it requires deeper inspection.
+    - It reads `/sys/block/<device>/queue/rotational`.
+    - `0` means Solid State → `StorageKind::SSD`
+    - `1` means Mechanical → `StorageKind::HDD`
+
+This low-level check empowers the entire `orchestrator` and `io` layer to dynamically tune itself to the host's actual hardware without asking the user.
+
+---
+
+## Data flow in `utils`
+
+```text
+  Utils::detect_what_kind_of_device_is()
+          │
+          ├─ "nvme..." ──→ NVMe
+          │
+          ├─ "mmcblk..." ──→ HDD
+          │
+          └─ "sdX" ──→ /sys/block/sdX/queue/rotational
+                                │
+                                ├─ 0 ──→ SSD
+                                └─ 1 ──→ HDD
+```
